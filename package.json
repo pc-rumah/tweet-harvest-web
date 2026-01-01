@@ -53,6 +53,10 @@
     "start": "ts-node src/crawl.ts",
     "dev": "npx tsx src/dev.ts",
     "build": "tsup",
-    "prepublish": "pnpm build"
+    "prepublish": "pnpm build",
+    "web:server": "cd web/server && npm run dev",
+    "web:client": "cd web/client && npm run dev",
+    "web:install": "cd web/server && npm install && cd ../client && npm install",
+    "web": "start cmd /c \"npm run web:server\" && timeout /t 3 && npm run web:client"
   }
 }
