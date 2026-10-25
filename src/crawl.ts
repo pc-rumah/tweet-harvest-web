@@ -445,3 +445,5 @@ export async function crawl({
     }
   }
 }
+
+export default { crawl };
