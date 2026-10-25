@@ -6,7 +6,7 @@ import dayjs from "dayjs";
 import { Entry } from "./types/tweets.types";
 import { chromium } from "playwright-extra";
 import stealth from "puppeteer-extra-plugin-stealth";
-import { inputKeywords } from "./features/input-keywords";
+// inputKeywords is no longer used; we now build the search URL directly
 import { listenNetworkRequests } from "./features/listen-network-requests";
 import { calculateForRateLimit } from "./features/exponential-backoff";
 import { HEADLESS_MODE } from "./env";
@@ -16,6 +16,7 @@ import {
   FUlL_PATH_FOLDER_DESTINATION,
   NOW,
   TWITTER_SEARCH_ADVANCED_URL,
+  buildTwitterSearchUrl,
 } from "./constants";
 import { CACHE_KEYS, cache } from "./cache";
 import { logError, scrollDown, scrollUp } from "./helpers/page.helper";
@@ -113,6 +114,35 @@ export async function crawl({
 
   let MODIFIED_SEARCH_KEYWORDS = SEARCH_KEYWORDS;
 
+  // Build direct search URLs (bypasses Advanced Search form UI)
+  const DIRECT_SEARCH_URL: Record<string, string> = {};
+  if (IS_SEARCH_MODE && SEARCH_KEYWORDS) {
+    DIRECT_SEARCH_URL[SEARCH_TAB] = buildTwitterSearchUrl(
+      SEARCH_KEYWORDS,
+      SEARCH_TAB,
+      SEARCH_FROM_DATE,
+      SEARCH_TO_DATE
+    );
+    DIRECT_SEARCH_URL[SWITCHED_SEARCH_TAB] = buildTwitterSearchUrl(
+      SEARCH_KEYWORDS,
+      SWITCHED_SEARCH_TAB as "TOP" | "LATEST",
+      SEARCH_FROM_DATE,
+      SEARCH_TO_DATE
+    );
+
+    // Keep MODIFIED_SEARCH_KEYWORDS in sync for logging
+    let _kw = SEARCH_KEYWORDS;
+    if (SEARCH_FROM_DATE) {
+      const [d, m, y] = SEARCH_FROM_DATE.split(" ")[0].split("-");
+      _kw += ` since:${y}-${m}-${d}`;
+    }
+    if (SEARCH_TO_DATE) {
+      const [d, m, y] = SEARCH_TO_DATE.split(" ")[0].split("-");
+      _kw += ` until:${y}-${m}-${d}`;
+    }
+    MODIFIED_SEARCH_KEYWORDS = _kw;
+  }
+
   const CURRENT_PACKAGE_VERSION = require("../package.json").version;
 
   // Reset state for new crawl
@@ -160,12 +190,17 @@ export async function crawl({
   listenNetworkRequests(page);
 
   async function startCrawlTwitter({
-    twitterSearchUrl = TWITTER_SEARCH_ADVANCED_URL[SEARCH_TAB],
+    twitterSearchUrl = IS_SEARCH_MODE
+      ? DIRECT_SEARCH_URL[SEARCH_TAB]
+      : TWITTER_SEARCH_ADVANCED_URL[SEARCH_TAB],
   }: StartCrawlTwitterParams = {}) {
     if (IS_DETAIL_MODE) {
       await page.goto(TWEET_THREAD_URL);
     } else {
+      console.info(chalk.gray(`\nNavigating to: ${twitterSearchUrl}\n`));
       await page.goto(twitterSearchUrl);
+      // Wait for the timeline to begin loading
+      await page.waitForTimeout(3000);
     }
 
     // check is current page url is twitter login page (have /login in the url)
@@ -177,13 +212,9 @@ export async function crawl({
       return browser.close();
     }
 
+    // No need to fill form — keywords are already embedded in the URL
     if (IS_SEARCH_MODE) {
-      inputKeywords(page, {
-        SEARCH_FROM_DATE,
-        SEARCH_TO_DATE,
-        SEARCH_KEYWORDS,
-        MODIFIED_SEARCH_KEYWORDS,
-      });
+      console.info(chalk.yellow(`\nSearching for: ${MODIFIED_SEARCH_KEYWORDS}\n`));
     }
 
     let timeoutCount = 0;
@@ -420,7 +451,9 @@ export async function crawl({
       console.info(`No tweets found on "${SEARCH_TAB}" tab, trying "${SWITCHED_SEARCH_TAB}" tab...`);
 
       await startCrawlTwitter({
-        twitterSearchUrl: TWITTER_SEARCH_ADVANCED_URL[SWITCHED_SEARCH_TAB],
+        twitterSearchUrl: IS_SEARCH_MODE
+          ? DIRECT_SEARCH_URL[SWITCHED_SEARCH_TAB]
+          : TWITTER_SEARCH_ADVANCED_URL[SWITCHED_SEARCH_TAB],
       });
     }
   } catch (error) {

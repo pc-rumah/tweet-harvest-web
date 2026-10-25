@@ -53,6 +53,7 @@
     "start": "ts-node src/crawl.ts",
     "dev": "npx tsx src/dev.ts",
     "build": "tsup",
+    "prepare": "npm run build",
     "prepublish": "npm run build",
     "web:server": "cd web/server && npm run dev",
     "web:client": "cd web/client && npm run dev",

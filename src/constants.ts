@@ -6,6 +6,33 @@ export const TWITTER_SEARCH_ADVANCED_URL = {
   LATEST: "https://x.com/search-advanced?f=live",
 };
 
+/**
+ * Build a direct Twitter/X search URL using query parameters.
+ * This avoids relying on the Advanced Search form UI which can change.
+ */
+export function buildTwitterSearchUrl(
+  keywords: string,
+  tab: "TOP" | "LATEST",
+  fromDate?: string,
+  toDate?: string
+): string {
+  let query = keywords;
+
+  if (fromDate) {
+    const [day, month, year] = fromDate.split(" ")[0].split("-");
+    query += ` since:${year}-${month}-${day}`;
+  }
+
+  if (toDate) {
+    const [day, month, year] = toDate.split(" ")[0].split("-");
+    query += ` until:${year}-${month}-${day}`;
+  }
+
+  const encoded = encodeURIComponent(query);
+  const tabParam = tab === "LATEST" ? "&f=live" : "";
+  return `https://x.com/search?q=${encoded}${tabParam}&src=typed_query`;
+}
+
 export const NOW = dayjs().format("DD-MM-YYYY HH-mm-ss");
 
 export const FOLDER_DESTINATION = "./tweets-data";
